@@ -1,83 +1,60 @@
 # Permaweb Mobile
 
-> A mobile application for interfacing with PermawebOS coding agent pods.
+> A self-contained Arweave wallet app for coding with AI agents via HTTPSig-authenticated pods.
 
 ## Overview
 
-Permaweb Mobile is a React Native application that connects users to their personal coding agent pods. Users authenticate with their Arweave or Ethereum wallet, access persistent workspace storage, and interact with AI coding assistants from their mobile devices.
+Permaweb Mobile is a **wallet-first** mobile application that manages JWK (JSON Web Key) wallets directly on device. It uses HTTPSig (RFC 9421) for authenticated communication with PermawebOS coding agent pods.
 
-## Features
+### Key Features
 
-- **Wallet Authentication** - Arweave (Wander) and Ethereum (MetaMask, WalletConnect)
-- **Persistent Sessions** - Coding sessions survive app restarts
-- **Real-Time Streaming** - SSE for streaming AI responses
-- **Offline-First** - Local file cache with sync when online
-- **Code Editor** - Monaco-powered editor with mobile optimizations
-- **Terminal Access** - xterm.js terminal in browser
-- **Push Notifications** - Get notified when AI completes tasks
+- **JWK Wallet Management** - Create, import, export wallets securely
+- **HTTPSig Authentication** - Sign all pod requests with wallet JWK
+- **No External Dependencies** - Wallet keys never leave device
+- **Secure Storage** - Keychain (iOS) / Keystore (Android)
+- **Offline-First** - Local state with sync when online
+- **Real-Time Streaming** - SSE for AI responses
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      Mobile App                              │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │  Auth       │  │  Session    │  │  Code Editor       │ │
-│  │  (Wallet)   │  │  Manager    │  │  (Monaco)          │ │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │  File       │  │  Terminal   │  │  Push              │ │
-│  │  Browser    │  │  View       │  │  Notifications     │ │
-│  └─────────────┘  └─────────────┘  └─────────────────────┘ │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │                 Wallet Manager                           ││
+│  │  - Create JWK           - Import JWK                    ││
+│  │  - Export (backup)      - SecureStore                   ││
+│  └─────────────────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │                  HTTPSig Signer                          ││
+│  │  - Sign HTTP requests    - Verify signatures            ││
+│  └─────────────────────────────────────────────────────────┘│
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │                   Pod Client                             ││
+│  │  - Create pods          - Send messages                  ││
+│  │  - File operations      - SSE stream                     ││
+│  └─────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────┘
                               │
-                              │ HTTPS + Wallet Auth
+                              │ HTTPSig-signed requests
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    PermawebOS Pod                            │
-│  - HTTPSig authentication                                    │
+│  - HTTPSig verification                                      │
 │  - Persistent storage (PVC)                                 │
 │  - OpenCode agent                                           │
-│  - Real-time streaming                                       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## Tech Stack
 
-- **Framework**: React Native + Expo
-- **Language**: TypeScript
-- **Auth**: Wander SDK / WalletConnect
-- **Editor**: Monaco Editor (web) / CodeMirror (mobile)
-- **Terminal**: xterm.js
-- **State**: React Query + Zustand
-- **Storage**: Expo SecureStore + SQLite
+- **Framework**: Expo 50 + React Native 0.73
+- **Language**: TypeScript (strict mode)
+- **Routing**: Expo Router (file-based)
+- **State**: Zustand + React Query
+- **Auth**: JWK wallet + HTTPSig
+- **Storage**: Expo SecureStore (Keychain/Keystore)
 - **Real-time**: SSE (Server-Sent Events)
-- **Push**: Expo Notifications
-
-## Project Structure
-
-```
-permaweb-mobile/
-├── docs/                    # Documentation
-│   ├── ARCHITECTURE.md     # System architecture
-│   ├── API.md              # API reference
-│   └── MOCKUPS.md          # UI mockups
-├── src/
-│   ├── components/         # Reusable components
-│   │   ├── Auth/           # Authentication components
-│   │   ├── Editor/         # Code editor components
-│   │   ├── Files/          # File browser components
-│   │   ├── Terminal/        # Terminal components
-│   │   └── Chat/           # Chat/message components
-│   ├── screens/            # Screen components
-│   ├── services/           # API and business logic
-│   ├── hooks/              # Custom React hooks
-│   ├── utils/              # Utility functions
-│   └── types/              # TypeScript types
-├── assets/                 # Images, fonts, etc.
-├── App.tsx                 # Main app entry
-└── package.json
-```
 
 ## Getting Started
 
@@ -90,7 +67,7 @@ permaweb-mobile/
 ### Installation
 
 ```bash
-# Clone the repository
+# Clone
 git clone https://github.com/twilson63/permaweb-mobile.git
 cd permaweb-mobile
 
@@ -101,7 +78,7 @@ npm install
 npx expo start
 ```
 
-### Development
+### Run on Device
 
 ```bash
 # iOS
@@ -114,44 +91,117 @@ npx expo start --android
 npx expo start --web
 ```
 
-## API Endpoints
+## Wallet Flow
 
-The app connects to PermawebOS pods via these endpoints:
+### Create Wallet
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/auth/nonce` | POST | Get authentication nonce |
-| `/api/auth/verify` | POST | Verify wallet signature |
-| `/api/pods` | POST | Create new pod |
-| `/api/pods` | GET | List user's pods |
-| `/session` | POST | Create coding session |
-| `/session/:id/message` | POST | Send message to agent |
-| `/session/:id/prompt_async` | POST | Send message (async) |
-| `/event` | GET | SSE stream for responses |
-| `/file/content` | GET | Read file from pod |
-| `/file/list` | GET | List files in pod |
+```typescript
+import { authService } from './services/AuthService';
 
-## Screens
+// Create new JWK wallet
+const wallet = await authService.createWallet();
+console.log('Address:', wallet.address);
+// Backup JWK
+const jwk = await authService.exportWallet();
+```
 
-1. **Welcome/Auth** - Wallet connection
-2. **Home** - Pod list and status
-3. **Session** - Coding session (chat + editor)
-4. **Files** - File browser
-5. **Settings** - App preferences
+### Import Wallet
 
-## Contributing
+```typescript
+// Import from JWK JSON
+const wallet = await authService.importWallet(jwkJson);
+```
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+### Unlock with PIN
+
+```typescript
+// If wallet has PIN protection
+const wallet = await authService.unlockWallet(pin);
+```
+
+## HTTPSig Authentication
+
+All pod requests are signed with the wallet's JWK:
+
+```typescript
+import { podService } from './services/PodService';
+
+// Create pod (signed request)
+const pod = await podService.createPod('my-project', 'claude-3-opus');
+
+// Send message (signed request)
+await podService.sendMessage(pod.id, sessionId, 'Write a React component');
+
+// Subscribe to responses (SSE stream)
+const es = podService.subscribeToEvents(pod.id, sessionId, (event) => {
+  console.log('Agent response:', event);
+});
+```
+
+## Security
+
+| Aspect | Implementation |
+|--------|---------------|
+| **Key Storage** | SecureStore (Keychain/Keystore) |
+| **Key Export** | QR code or file, optional PIN encryption |
+| **Request Signing** | HTTPSig with RSA-SHA256 |
+| **Session Auth** | Signature verified by pod's auth-proxy |
+| **Biometric** | Optional Face ID / Touch ID |
+
+## Project Structure
+
+```
+permaweb-mobile/
+├── app/                      # Expo Router screens
+│   ├── _layout.tsx          # Root layout
+│   ├── index.tsx            # Entry (redirects)
+│   ├── auth/
+│   │   ├── create.tsx       # Create wallet
+│   │   └── import.tsx       # Import wallet
+│   ├── (tabs)/              # Tab navigation
+│   │   ├── index.tsx        # Home (pod list)
+│   │   ├── files.tsx        # File browser
+│   │   └── settings.tsx     # Settings
+│   └── session/
+│       └── [podId].tsx      # Coding session
+├── src/
+│   ├── components/          # UI components
+│   ├── services/
+│   │   ├── AuthService.ts   # Wallet auth
+│   │   ├── WalletManager.ts # JWK management
+│   │   ├── HTTPSigSigner.ts # Request signing
+│   │   └── PodService.ts    # Pod client
+│   └── hooks/               # Custom hooks
+├── docs/
+│   ├── MOCKUPS.md          # UI mockups
+│   ├── WALLET_ARCHITECTURE.md
+│   └── EXPO_BEST_PRACTICES.md
+└── package.json
+```
+
+## Building
+
+```bash
+# iOS
+eas build --platform ios
+
+# Android
+eas build --platform android
+
+# Submit to stores
+eas submit --platform ios
+eas submit --platform android
+
+# OTA updates
+eas update --branch production --message "New features"
+```
+
+## Documentation
+
+- [Wallet Architecture](./docs/WALLET_ARCHITECTURE.md) - JWK management and HTTPSig
+- [Expo Best Practices](./docs/EXPO_BEST_PRACTICES.md) - Performance and patterns
+- [UI Mockups](./docs/MOCKUPS.md) - Screen designs
 
 ## License
 
 MIT
-
-## Links
-
-- [PermawebOS](https://github.com/twilson63/permaweb-os)
-- [OpenCode](https://github.com/sst/opencode)
-- [Wander Wallet](https://wander.app)

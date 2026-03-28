@@ -1,130 +1,152 @@
-// Auth Service - Wallet authentication for Permaweb Mobile
+// Auth Service - JWK wallet authentication
 
-export interface WalletInfo {
-  type: 'arweave' | 'ethereum';
-  address: string;
-}
+import { walletManager, WalletInfo } from './WalletManager';
+import { HTTPSigFetch } from './HTTPSigSigner';
 
-export interface AuthResponse {
-  token: string;
-  podId?: string;
+export interface AuthState {
+  isAuthenticated: boolean;
+  wallet: WalletInfo | null;
+  pin: string | null;
 }
 
 export class AuthService {
-  private token: string | null = null;
-  private wallet: WalletInfo | null = null;
-
-  // Arweave Wallet (Wander)
-  async connectArweave(): Promise<WalletInfo> {
-    // In production, use Wander SDK
-    // For now, mock the connection
-    if (typeof window !== 'undefined' && (window as any).arweaveWallet) {
-      const wallet = (window as any).arweaveWallet;
-      const address = await wallet.getActiveAddress();
-      return { type: 'arweave', address };
+  private httpSigFetch: HTTPSigFetch | null = null;
+  private state: AuthState = {
+    isAuthenticated: false,
+    wallet: null,
+    pin: null,
+  };
+  
+  // Check if wallet exists
+  async hasWallet(): Promise<boolean> {
+    return walletManager.hasWallet();
+  }
+  
+  // Get wallet address (no auth needed)
+  async getAddress(): Promise<string | null> {
+    return walletManager.getAddress();
+  }
+  
+  // Create new wallet
+  async createWallet(pin?: string): Promise<WalletInfo> {
+    // Check if wallet already exists
+    if (await this.hasWallet()) {
+      throw new Error('Wallet already exists. Import or unlock existing wallet.');
     }
     
-    // Mock for development
-    throw new Error('Arweave wallet not installed. Please install Wander wallet.');
+    // Generate new JWK
+    const wallet = await walletManager.createWallet();
+    
+    // Store securely
+    await walletManager.storeWallet(wallet, pin);
+    
+    // Update state
+    this.state = {
+      isAuthenticated: true,
+      wallet,
+      pin: pin || null,
+    };
+    
+    // Create HTTPSig fetch client
+    this.httpSigFetch = new HTTPSigFetch(walletManager, pin);
+    
+    return wallet;
   }
-
-  // Ethereum Wallet (MetaMask / WalletConnect)
-  async connectEthereum(): Promise<WalletInfo> {
-    // In production, use WalletConnect or ethers
-    // For now, mock the connection
-    if (typeof window !== 'undefined' && (window as any).ethereum) {
-      const accounts = await (window as any).ethereum.request({
-        method: 'eth_requestAccounts'
-      });
-      return { type: 'ethereum', address: accounts[0] };
+  
+  // Import existing wallet
+  async importWallet(jwkJson: string, pin?: string): Promise<WalletInfo> {
+    // Import JWK
+    const wallet = await walletManager.importWallet(jwkJson);
+    
+    // Store securely
+    await walletManager.storeWallet(wallet, pin);
+    
+    // Update state
+    this.state = {
+      isAuthenticated: true,
+      wallet,
+      pin: pin || null,
+    };
+    
+    // Create HTTPSig fetch client
+    this.httpSigFetch = new HTTPSigFetch(walletManager, pin);
+    
+    return wallet;
+  }
+  
+  // Unlock wallet with PIN
+  async unlockWallet(pin: string): Promise<WalletInfo> {
+    const wallet = await walletManager.getWallet(pin);
+    
+    if (!wallet) {
+      throw new Error('Invalid PIN or no wallet found');
     }
     
-    throw new Error('Ethereum wallet not installed. Please install MetaMask.');
-  }
-
-  // Get authentication nonce
-  async getNonce(address: string, walletType: 'arweave' | 'ethereum'): Promise<string> {
-    const response = await fetch('https://api.permaweb.run/api/auth/nonce', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address, walletType })
-    });
+    // Update state
+    this.state = {
+      isAuthenticated: true,
+      wallet,
+      pin,
+    };
     
-    const { nonce } = await response.json();
-    return nonce;
-  }
-
-  // Verify signature and get token
-  async verify(
-    address: string,
-    signature: string,
-    nonce: string,
-    walletType: 'arweave' | 'ethereum'
-  ): Promise<AuthResponse> {
-    const response = await fetch('https://api.permaweb.run/api/auth/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address, signature, nonce, walletType })
-    });
+    // Create HTTPSig fetch client
+    this.httpSigFetch = new HTTPSigFetch(walletManager, pin);
     
-    const data = await response.json();
-    this.token = data.token;
-    return data;
+    return wallet;
   }
-
-  // Sign message with wallet
-  async signMessage(message: string): Promise<string> {
-    if (!this.wallet) {
-      throw new Error('No wallet connected');
+  
+  // Lock wallet (require PIN again)
+  lockWallet(): void {
+    this.state = {
+      isAuthenticated: false,
+      wallet: null,
+      pin: null,
+    };
+    this.httpSigFetch = null;
+  }
+  
+  // Get current auth state
+  getState(): AuthState {
+    return { ...this.state };
+  }
+  
+  // Get HTTPSig fetch client
+  getFetch(): HTTPSigFetch {
+    if (!this.httpSigFetch) {
+      throw new Error('Not authenticated. Unlock wallet first.');
     }
-
-    if (this.wallet.type === 'arweave') {
-      if (typeof window !== 'undefined' && (window as any).arweaveWallet) {
-        return await (window as any).arweaveWallet.signMessage(message);
-      }
-    } else if (this.wallet.type === 'ethereum') {
-      if (typeof window !== 'undefined' && (window as any).ethereum) {
-        return await (window as any).ethereum.request({
-          method: 'personal_sign',
-          params: [message, this.wallet.address]
-        });
-      }
+    return this.httpSigFetch;
+  }
+  
+  // Export wallet for backup
+  async exportWallet(pin?: string): Promise<string> {
+    return walletManager.exportWallet(pin);
+  }
+  
+  // Delete wallet
+  async deleteWallet(pin?: string): Promise<void> {
+    // Verify PIN if set
+    if (this.state.pin || pin) {
+      await this.unlockWallet(pin || this.state.pin || '');
     }
-
-    throw new Error('Wallet not available');
+    
+    await walletManager.deleteWallet();
+    
+    this.state = {
+      isAuthenticated: false,
+      wallet: null,
+      pin: null,
+    };
+    this.httpSigFetch = null;
   }
-
-  // Full authentication flow
-  async authenticate(walletType: 'arweave' | 'ethereum'): Promise<AuthResponse> {
-    // 1. Connect wallet
-    this.wallet = walletType === 'arweave'
-      ? await this.connectArweave()
-      : await this.connectEthereum();
-
-    // 2. Get nonce
-    const nonce = await this.getNonce(this.wallet.address, walletType);
-
-    // 3. Sign nonce
-    const signature = await this.signMessage(nonce);
-
-    // 4. Verify and get token
-    return await this.verify(this.wallet.address, signature, nonce, walletType);
-  }
-
-  // Get stored token
-  getToken(): string | null {
-    return this.token;
-  }
-
-  // Get connected wallet
-  getWallet(): WalletInfo | null {
-    return this.wallet;
-  }
-
-  // Logout
-  logout(): void {
-    this.token = null;
-    this.wallet = null;
+  
+  // Get wallet balance
+  async getBalance(): Promise<number> {
+    if (!this.state.wallet) {
+      throw new Error('Not authenticated');
+    }
+    
+    return walletManager.getBalance(this.state.wallet.address);
   }
 }
 
