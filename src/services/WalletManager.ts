@@ -283,10 +283,14 @@ export class WalletManager {
    * Get address from JWK
    */
   private async getAddressFromJwk(jwk: JWK): Promise<string> {
-    const hash = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      jwk.n
+    const { digestStringAsync, CryptoDigestAlgorithm, CryptoEncoding } = require('expo-crypto');
+    
+    const hash = await digestStringAsync(
+      CryptoDigestAlgorithm.SHA256,
+      jwk.n,
+      CryptoEncoding.HEX
     );
+    
     return hash.slice(0, 43); // Arweave addresses are 43 characters
   }
 

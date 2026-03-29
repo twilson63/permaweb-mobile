@@ -98,10 +98,12 @@ export class HTTPSigSigner {
     const hash = await digestStringAsync(
       CryptoDigestAlgorithm.SHA256,
       data,
-      CryptoEncoding.BASE64
+      CryptoEncoding.HEX  // Use HEX and convert to base64
     );
     
-    return `SHA-256=${hash}`;
+    // Convert hex to base64
+    const base64 = Buffer.from(hash, 'hex').toString('base64');
+    return `SHA-256=${base64}`;
   }
   
   /**
