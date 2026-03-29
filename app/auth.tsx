@@ -6,12 +6,23 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   TextInput,
   Modal,
+  Platform,
 } from 'react-native';
 import { walletManager } from '../src/services/WalletManager';
 import { authService } from '../src/services/AuthService';
+
+// Cross-platform alert
+function showAlert(title: string, message: string, buttons?: { text: string; onPress?: () => void }[]) {
+  if (Platform.OS === 'web') {
+    alert(`${title}\n\n${message}`);
+    buttons?.[0]?.onPress?.();
+  } else {
+    const { Alert } = require('react-native');
+    Alert.alert(title, message, buttons);
+  }
+}
 
 export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
@@ -21,14 +32,17 @@ export default function AuthScreen() {
   async function handleCreateWallet() {
     setLoading(true);
     try {
+      console.log('Creating wallet...');
       const wallet = await authService.createWallet();
-      Alert.alert(
+      console.log('Wallet created:', wallet.address);
+      showAlert(
         'Wallet Created! 🎉',
         `Address: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-8)}\n\nPlease backup your wallet!`,
         [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
       );
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      console.error('Error creating wallet:', error);
+      showAlert('Error', error.message || 'Failed to create wallet');
     } finally {
       setLoading(false);
     }
@@ -36,7 +50,7 @@ export default function AuthScreen() {
 
   async function handleImportWallet() {
     if (!importKey.trim()) {
-      Alert.alert('Error', 'Please enter your JWK');
+      showAlert('Error', 'Please enter your JWK');
       return;
     }
 
@@ -44,13 +58,14 @@ export default function AuthScreen() {
     try {
       const wallet = await authService.importWallet(importKey.trim());
       setShowImport(false);
-      Alert.alert(
+      showAlert(
         'Wallet Imported! ✅',
         `Address: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-8)}`,
         [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
       );
     } catch (error: any) {
-      Alert.alert('Error', 'Invalid JWK format');
+      console.error('Error importing wallet:', error);
+      showAlert('Error', 'Invalid JWK format. Please check and try again.');
     } finally {
       setLoading(false);
     }

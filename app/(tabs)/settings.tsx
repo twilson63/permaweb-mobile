@@ -1,12 +1,31 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { authService } from '../../src/services/AuthService';
+
+// Cross-platform alert
+function showAlert(title: string, message: string, buttons?: { text: string; style?: string; onPress?: () => void }[]) {
+  if (Platform.OS === 'web') {
+    if (buttons?.length === 2) {
+      // Two buttons - show confirm dialog
+      const result = confirm(`${title}\n\n${message}\n\nPress OK to continue.`);
+      if (result) {
+        buttons[1]?.onPress?.();
+      }
+    } else {
+      alert(`${title}\n\n${message}`);
+      buttons?.[0]?.onPress?.();
+    }
+  } else {
+    const { Alert } = require('react-native');
+    Alert.alert(title, message, buttons);
+  }
+}
 
 export default function SettingsScreen() {
   const state = authService.getState();
 
   async function handleLogout() {
-    Alert.alert(
+    showAlert(
       'Logout',
       'Are you sure you want to logout? You will need your JWK to login again.',
       [
@@ -26,12 +45,15 @@ export default function SettingsScreen() {
   async function handleExportWallet() {
     try {
       const jwk = await authService.exportWallet();
-      Alert.alert(
-        'Wallet Backup',
-        'Copy your JWK and store it safely!\n\n' + jwk.slice(0, 50) + '...'
-      );
+      if (Platform.OS === 'web') {
+        // On web, copy to clipboard
+        navigator.clipboard?.writeText(jwk);
+        showAlert('Wallet Backup', 'JWK copied to clipboard!\n\nSave it somewhere safe.');
+      } else {
+        showAlert('Wallet Backup', 'Copy your JWK:\n\n' + jwk.slice(0, 50) + '...');
+      }
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      showAlert('Error', error.message);
     }
   }
 
