@@ -1,7 +1,7 @@
 // Wallet Manager - JWK wallet management for Arweave
 
 import * as SecureStore from 'expo-secure-store';
-import * as Crypto from 'expo-crypto';
+import { digestStringAsync, CryptoDigestAlgorithm, CryptoEncoding } from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
@@ -186,7 +186,6 @@ export class WalletManager {
     // For now, return a mock signature (demo mode)
     console.warn('RSA signing not fully implemented for native - using demo mode');
     
-    const { digestStringAsync, CryptoDigestAlgorithm, CryptoEncoding } = require('expo-crypto');
     const hash = await digestStringAsync(
       CryptoDigestAlgorithm.SHA256,
       data,
@@ -286,8 +285,6 @@ export class WalletManager {
    * Get address from JWK
    */
   private async getAddressFromJwk(jwk: JWK): Promise<string> {
-    const { digestStringAsync, CryptoDigestAlgorithm, CryptoEncoding } = require('expo-crypto');
-    
     const hash = await digestStringAsync(
       CryptoDigestAlgorithm.SHA256,
       jwk.n,

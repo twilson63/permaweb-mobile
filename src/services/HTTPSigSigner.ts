@@ -1,6 +1,7 @@
 // HTTPSig Signer - Sign HTTP requests with JWK
 
 import { WalletManager, JWK } from './WalletManager';
+import { digestStringAsync, CryptoDigestAlgorithm, CryptoEncoding } from 'expo-crypto';
 
 interface SignedRequest {
   method: string;
@@ -92,8 +93,6 @@ export class HTTPSigSigner {
    * SHA-256 hash to base64
    */
   private async sha256Base64(data: string): Promise<string> {
-    const { digestStringAsync, CryptoDigestAlgorithm, CryptoEncoding } = require('expo-crypto');
-    
     const hash = await digestStringAsync(
       CryptoDigestAlgorithm.SHA256,
       data,
