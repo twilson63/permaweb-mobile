@@ -71,27 +71,31 @@ export default function AuthScreen() {
     // In production, would prompt for PIN
     setLoading(true);
     try {
-      const wallet = await authService.getWallet();
-      if (wallet) {
-        if (Platform.OS === 'web') {
-          alert(`Wallet Unlocked! ✅\n\nAddress: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-8)}`);
-          setLoading(false);
-          router.replace('/(tabs)');
-        } else {
-          Alert.alert(
-            'Wallet Unlocked! ✅',
-            `Address: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-8)}`,
-            [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
-          );
-          setLoading(false);
-        }
+      // Call unlockWallet which properly sets auth state
+      // Pass empty PIN for demo (no PIN protection)
+      const wallet = await authService.unlockWallet('');
+      
+      if (Platform.OS === 'web') {
+        alert(`Wallet Unlocked! ✅\n\nAddress: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-8)}`);
+        setLoading(false);
+        router.replace('/(tabs)');
       } else {
-        // No wallet found, show create
-        setHasExistingWallet(false);
+        Alert.alert(
+          'Wallet Unlocked! ✅',
+          `Address: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-8)}`,
+          [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
+        );
+        setLoading(false);
       }
     } catch (error: any) {
       console.error('Error unlocking wallet:', error);
       setLoading(false);
+      
+      // If unlock fails, show create/import options
+      if (error.message.includes('no wallet')) {
+        setHasExistingWallet(false);
+      }
+      
       if (Platform.OS === 'web') {
         alert('Error: ' + (error.message || 'Failed to unlock wallet'));
       } else {

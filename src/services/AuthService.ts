@@ -74,19 +74,40 @@ export class AuthService {
     return wallet;
   }
   
-  // Unlock wallet with PIN
-  async unlockWallet(pin: string): Promise<WalletInfo> {
+  // Unlock wallet (get existing wallet without PIN)
+  async getWallet(pin?: string): Promise<WalletInfo | null> {
+    try {
+      const jwkJson = await storage.getItem('wallet_jwk');
+      const address = await storage.getItem('wallet_address');
+      const createdAt = await storage.getItem('wallet_created');
+
+      if (!jwkJson || !address) {
+        return null;
+      }
+
+      return {
+        address,
+        jwk: JSON.parse(jwkJson),
+        createdAt: createdAt || new Date().toISOString(),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // Unlock wallet with optional PIN
+  async unlockWallet(pin?: string): Promise<WalletInfo> {
     const wallet = await walletManager.getWallet(pin);
     
     if (!wallet) {
-      throw new Error('Invalid PIN or no wallet found');
+      throw new Error('No wallet found. Please create or import a wallet.');
     }
     
     // Update state
     this.state = {
       isAuthenticated: true,
       wallet,
-      pin,
+      pin: pin || null,
     };
     
     // Create HTTPSig fetch client
