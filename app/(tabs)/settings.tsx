@@ -25,21 +25,29 @@ export default function SettingsScreen() {
   const state = authService.getState();
 
   async function handleLogout() {
-    showAlert(
-      'Logout',
-      'Are you sure you want to logout? You will need your JWK to login again.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            authService.lockWallet();
-            router.replace('/auth');
+    if (Platform.OS === 'web') {
+      const result = confirm('Logout\n\nAre you sure? You will need your JWK to login again.\n\nClick OK to logout, Cancel to stay logged in.');
+      if (result) {
+        await authService.deleteWallet();
+        router.replace('/auth');
+      }
+    } else {
+      showAlert(
+        'Logout',
+        'Are you sure you want to logout? You will need your JWK to login again.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Logout',
+            style: 'destructive',
+            onPress: async () => {
+              await authService.deleteWallet();
+              router.replace('/auth');
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   }
 
   async function handleExportWallet() {
@@ -47,13 +55,17 @@ export default function SettingsScreen() {
       const jwk = await authService.exportWallet();
       if (Platform.OS === 'web') {
         // On web, copy to clipboard
-        navigator.clipboard?.writeText(jwk);
-        showAlert('Wallet Backup', 'JWK copied to clipboard!\n\nSave it somewhere safe.');
+        await navigator.clipboard.writeText(jwk);
+        alert('Wallet Backup\n\nJWK copied to clipboard!\n\nSave it somewhere safe.');
       } else {
-        showAlert('Wallet Backup', 'Copy your JWK:\n\n' + jwk.slice(0, 50) + '...');
+        Alert.alert('Wallet Backup', 'Copy your JWK:\n\n' + jwk.slice(0, 50) + '...');
       }
     } catch (error: any) {
-      showAlert('Error', error.message);
+      if (Platform.OS === 'web') {
+        alert('Error: ' + error.message);
+      } else {
+        Alert.alert('Error', error.message);
+      }
     }
   }
 
