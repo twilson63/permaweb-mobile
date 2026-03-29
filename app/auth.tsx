@@ -9,20 +9,10 @@ import {
   TextInput,
   Modal,
   Platform,
+  Alert,
 } from 'react-native';
 import { walletManager } from '../src/services/WalletManager';
 import { authService } from '../src/services/AuthService';
-
-// Cross-platform alert
-function showAlert(title: string, message: string, buttons?: { text: string; onPress?: () => void }[]) {
-  if (Platform.OS === 'web') {
-    alert(`${title}\n\n${message}`);
-    buttons?.[0]?.onPress?.();
-  } else {
-    const { Alert } = require('react-native');
-    Alert.alert(title, message, buttons);
-  }
-}
 
 export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
@@ -35,22 +25,38 @@ export default function AuthScreen() {
       console.log('Creating wallet...');
       const wallet = await authService.createWallet();
       console.log('Wallet created:', wallet.address);
-      showAlert(
-        'Wallet Created! 🎉',
-        `Address: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-8)}\n\nPlease backup your wallet!`,
-        [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
-      );
+      
+      // On web, alert is blocking - navigate after
+      if (Platform.OS === 'web') {
+        alert(`Wallet Created! 🎉\n\nAddress: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-8)}\n\nPlease backup your wallet!`);
+        setLoading(false);
+        router.replace('/(tabs)');
+      } else {
+        Alert.alert(
+          'Wallet Created! 🎉',
+          `Address: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-8)}\n\nPlease backup your wallet!`,
+          [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
+        );
+        setLoading(false);
+      }
     } catch (error: any) {
       console.error('Error creating wallet:', error);
-      showAlert('Error', error.message || 'Failed to create wallet');
-    } finally {
       setLoading(false);
+      if (Platform.OS === 'web') {
+        alert('Error: ' + (error.message || 'Failed to create wallet'));
+      } else {
+        Alert.alert('Error', error.message || 'Failed to create wallet');
+      }
     }
   }
 
   async function handleImportWallet() {
     if (!importKey.trim()) {
-      showAlert('Error', 'Please enter your JWK');
+      if (Platform.OS === 'web') {
+        alert('Error: Please enter your JWK');
+      } else {
+        Alert.alert('Error', 'Please enter your JWK');
+      }
       return;
     }
 
@@ -58,16 +64,27 @@ export default function AuthScreen() {
     try {
       const wallet = await authService.importWallet(importKey.trim());
       setShowImport(false);
-      showAlert(
-        'Wallet Imported! ✅',
-        `Address: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-8)}`,
-        [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
-      );
+      
+      if (Platform.OS === 'web') {
+        alert(`Wallet Imported! ✅\n\nAddress: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-8)}`);
+        setLoading(false);
+        router.replace('/(tabs)');
+      } else {
+        Alert.alert(
+          'Wallet Imported! ✅',
+          `Address: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-8)}`,
+          [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
+        );
+        setLoading(false);
+      }
     } catch (error: any) {
       console.error('Error importing wallet:', error);
-      showAlert('Error', 'Invalid JWK format. Please check and try again.');
-    } finally {
       setLoading(false);
+      if (Platform.OS === 'web') {
+        alert('Error: Invalid JWK format. Please check and try again.');
+      } else {
+        Alert.alert('Error', 'Invalid JWK format. Please check and try again.');
+      }
     }
   }
 
