@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  TextInput,
+  Modal,
 } from 'react-native';
 import { router } from 'expo-router';
 import { authService } from '../../src/services/AuthService';
@@ -20,6 +22,9 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [wallet, setWallet] = useState<{ address: string } | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [podName, setPodName] = useState('');
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -34,26 +39,18 @@ export default function HomeScreen() {
       }
       setWallet(state.wallet);
       
-      // Try to load pods, but use mock data if offline/demo
+      // Try to load real pods from API
       try {
         const podList = await podService.listPods();
+        console.log('Loaded pods:', podList.length);
         setPods(podList);
-      } catch (error) {
-        console.log('Using demo data - pod service not available');
-        // Mock pods for demo
-        setPods([
-          {
-            id: 'demo-pod-1',
-            name: 'my-project',
-            status: 'running',
-            subdomain: 'demo-pod-1.pods.permaweb.run',
-            ownerWallet: state.wallet?.address || '',
-            createdAt: new Date().toISOString(),
-          },
-        ]);
+      } catch (error: any) {
+        console.log('Failed to load pods:', error.message);
+        // Show empty state - user needs to create a pod
+        setPods([]);
       }
     } catch (error) {
-      console.error('Failed to load pods:', error);
+      console.error('Failed to load data:', error);
     } finally {
       setLoading(false);
     }
@@ -65,11 +62,42 @@ export default function HomeScreen() {
     setRefreshing(false);
   }
 
-  function handleCreatePod() {
-    if (Platform.OS === 'web') {
-      alert('Coming Soon!\n\nPod creation will be available soon.\n\nFor now, use the demo pod to explore the app.');
-    } else {
-      Alert.alert('Coming Soon', 'Pod creation will be available soon.');
+  async function handleCreatePod() {
+    if (!podName.trim()) {
+      if (Platform.OS === 'web') {
+        alert('Please enter a pod name');
+      } else {
+        Alert.alert('Error', 'Please enter a pod name');
+      }
+      return;
+    }
+
+    setCreating(true);
+    try {
+      console.log('Creating pod:', podName);
+      const newPod = await podService.createPod(podName.trim(), 'claude-3-opus');
+      console.log('Pod created:', newPod);
+      
+      setShowCreateModal(false);
+      setPodName('');
+      
+      // Refresh pod list
+      await loadData();
+      
+      if (Platform.OS === 'web') {
+        alert(`Pod Created! ✅\n\n${newPod.name}\n${newPod.subdomain}`);
+      } else {
+        Alert.alert('Pod Created! ✅', `${newPod.name}\n${newPod.subdomain}`);
+      }
+    } catch (error: any) {
+      console.error('Failed to create pod:', error);
+      if (Platform.OS === 'web') {
+        alert('Failed to create pod: ' + error.message);
+      } else {
+        Alert.alert('Error', 'Failed to create pod: ' + error.message);
+      }
+    } finally {
+      setCreating(false);
     }
   }
 
@@ -130,17 +158,59 @@ export default function HomeScreen() {
         ListEmptyComponent={
           <View style={styles.empty}>
             <Text style={styles.emptyText}>No pods yet</Text>
-            <Text style={styles.emptyHint}>Create your first coding pod</Text>
+            <Text style={styles.emptyHint}>Tap + to create your first pod</Text>
           </View>
         }
       />
 
       <TouchableOpacity
         style={styles.fab}
-        onPress={handleCreatePod}
+        onPress={() => setShowCreateModal(true)}
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
+
+      <Modal visible={showCreateModal} animationType="slide" transparent>
+        <View style={styles.modal}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Create New Pod</Text>
+            <Text style={styles.modalHint}>
+              Enter a name for your coding pod:
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="my-project"
+              placeholderTextColor="#64748B"
+              value={podName}
+              onChangeText={setPodName}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowCreateModal(false);
+                  setPodName('');
+                }}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.createButton]}
+                onPress={handleCreatePod}
+                disabled={creating}
+              >
+                {creating ? (
+                  <ActivityIndicator color="#F8FAFC" />
+                ) : (
+                  <Text style={styles.buttonText}>Create</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -227,5 +297,64 @@ const styles = StyleSheet.create({
   fabText: {
     fontSize: 24,
     color: '#F8FAFC',
+  },
+  modal: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  },
+  modalContent: {
+    backgroundColor: '#1E293B',
+    padding: 24,
+    borderRadius: 16,
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#F8FAFC',
+    marginBottom: 16,
+  },
+  modalHint: {
+    fontSize: 14,
+    color: '#94A3B8',
+    marginBottom: 12,
+  },
+  input: {
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    padding: 12,
+    color: '#F8FAFC',
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#64748B',
+  },
+  cancelText: {
+    color: '#94A3B8',
+    fontSize: 16,
+  },
+  createButton: {
+    backgroundColor: '#6366F1',
+  },
+  buttonText: {
+    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
