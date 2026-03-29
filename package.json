@@ -17,7 +17,7 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "^1.21.0",
     "@react-navigation/native": "^6.1.9",
-    "@shopify/flash-list": "^1.4.3",
+    "@shopify/flash-list": "^1.6.3",
     "@tanstack/react-query": "^5.17.0",
     "arweave": "^1.15.7",
     "eventsource": "^2.0.2",
@@ -41,7 +41,7 @@
     "react-native-reanimated": "~3.6.0",
     "react-native-safe-area-context": "4.8.2",
     "react-native-screens": "~3.29.0",
-    "react-native-svg": "^15.15.4",
+    "react-native-svg": "^14.1.0",
     "react-native-web": "~0.19.10",
     "zustand": "^4.4.7"
   },

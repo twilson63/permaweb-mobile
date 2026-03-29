@@ -7,6 +7,11 @@
     "icon": "./assets/icon.png",
     "scheme": "permaweb",
     "userInterfaceStyle": "automatic",
+    "extra": {
+      "eas": {
+        "projectId": "permaweb-mobile"
+      }
+    },
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",

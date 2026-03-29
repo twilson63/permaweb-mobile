@@ -2,6 +2,8 @@
 
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 export interface JWK {
   kty: string;
@@ -21,13 +23,49 @@ export interface WalletInfo {
   createdAt: string;
 }
 
+// Storage abstraction for web/native compatibility
+const storage = {
+  async getItem(key: string): Promise<string | null> {
+    try {
+      if (Platform.OS === 'web') {
+        return await AsyncStorage.getItem(key);
+      }
+      return await SecureStore.getItemAsync(key);
+    } catch {
+      return null;
+    }
+  },
+  
+  async setItem(key: string, value: string): Promise<void> {
+    try {
+      if (Platform.OS === 'web') {
+        await AsyncStorage.setItem(key, value);
+      } else {
+        await SecureStore.setItemAsync(key, value);
+      }
+    } catch (e) {
+      console.error('Storage error:', e);
+    }
+  },
+  
+  async deleteItem(key: string): Promise<void> {
+    try {
+      if (Platform.OS === 'web') {
+        await AsyncStorage.removeItem(key);
+      } else {
+        await SecureStore.deleteItemAsync(key);
+      }
+    } catch (e) {
+      console.error('Storage error:', e);
+    }
+  }
+};
+
 export class WalletManager {
   /**
    * Generate a new JWK wallet (simplified - demo only)
    */
   async createWallet(): Promise<WalletInfo> {
-    // In production, use proper RSA key generation
-    // For demo, we create a mock JWK
     const jwk: JWK = {
       kty: 'RSA',
       n: this.generateBase64Url(256),
@@ -40,7 +78,6 @@ export class WalletManager {
       qi: this.generateBase64Url(128),
     };
 
-    // Generate address from JWK
     const address = await this.getAddressFromJwk(jwk);
 
     return {
@@ -50,19 +87,14 @@ export class WalletManager {
     };
   }
 
-  /**
-   * Import an existing JWK wallet
-   */
   async importWallet(jwkJson: string): Promise<WalletInfo> {
     try {
       const jwk = typeof jwkJson === 'string' ? JSON.parse(jwkJson) : jwkJson;
 
-      // Validate JWK structure
       if (!jwk.kty || !jwk.n || !jwk.e) {
         throw new Error('Invalid JWK: missing required fields');
       }
 
-      // Get address from JWK
       const address = await this.getAddressFromJwk(jwk);
 
       return {
@@ -75,26 +107,18 @@ export class WalletManager {
     }
   }
 
-  /**
-   * Store wallet securely in device keychain
-   */
   async storeWallet(wallet: WalletInfo, pin?: string): Promise<void> {
     const jwkJson = JSON.stringify(wallet.jwk);
-
-    // Store JWK and address
-    await SecureStore.setItemAsync('wallet_jwk', jwkJson);
-    await SecureStore.setItemAsync('wallet_address', wallet.address);
-    await SecureStore.setItemAsync('wallet_created', wallet.createdAt);
+    await storage.setItem('wallet_jwk', jwkJson);
+    await storage.setItem('wallet_address', wallet.address);
+    await storage.setItem('wallet_created', wallet.createdAt);
   }
 
-  /**
-   * Retrieve wallet from secure storage
-   */
   async getWallet(pin?: string): Promise<WalletInfo | null> {
     try {
-      const jwkJson = await SecureStore.getItemAsync('wallet_jwk');
-      const address = await SecureStore.getItemAsync('wallet_address');
-      const createdAt = await SecureStore.getItemAsync('wallet_created');
+      const jwkJson = await storage.getItem('wallet_jwk');
+      const address = await storage.getItem('wallet_address');
+      const createdAt = await storage.getItem('wallet_created');
 
       if (!jwkJson || !address) {
         return null;
@@ -110,33 +134,21 @@ export class WalletManager {
     }
   }
 
-  /**
-   * Check if wallet exists
-   */
   async hasWallet(): Promise<boolean> {
-    const jwk = await SecureStore.getItemAsync('wallet_jwk');
+    const jwk = await storage.getItem('wallet_jwk');
     return !!jwk;
   }
 
-  /**
-   * Get wallet address only (no decryption needed)
-   */
   async getAddress(): Promise<string | null> {
-    return await SecureStore.getItemAsync('wallet_address');
+    return await storage.getItem('wallet_address');
   }
 
-  /**
-   * Delete wallet from device
-   */
   async deleteWallet(): Promise<void> {
-    await SecureStore.deleteItemAsync('wallet_jwk');
-    await SecureStore.deleteItemAsync('wallet_address');
-    await SecureStore.deleteItemAsync('wallet_created');
+    await storage.deleteItem('wallet_jwk');
+    await storage.deleteItem('wallet_address');
+    await storage.deleteItem('wallet_created');
   }
 
-  /**
-   * Export wallet JWK for backup
-   */
   async exportWallet(pin?: string): Promise<string> {
     const wallet = await this.getWallet(pin);
     if (!wallet) {
@@ -145,17 +157,12 @@ export class WalletManager {
     return JSON.stringify(wallet.jwk);
   }
 
-  /**
-   * Sign data with wallet JWK (simplified for demo)
-   */
   async sign(data: string, pin?: string): Promise<string> {
     const wallet = await this.getWallet(pin);
     if (!wallet) {
       throw new Error('No wallet found');
     }
 
-    // In production, use proper RSA signing
-    // For demo, we hash the data with the private key
     const hash = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
       data + (wallet.jwk.d || '')
@@ -164,28 +171,19 @@ export class WalletManager {
     return hash;
   }
 
-  /**
-   * Get wallet balance (in AR) - mock for demo
-   */
   async getBalance(address?: string): Promise<number> {
-    // Mock balance for demo
-    return 0.5;
+    return 0.5; // Mock balance for demo
   }
 
-  // Private helper methods
-
   private async getAddressFromJwk(jwk: JWK): Promise<string> {
-    // In production, derive from modulus
-    // For demo, hash the public key
     const hash = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
       jwk.n
     );
-    return hash.slice(0, 43); // Arweave addresses are 43 chars
+    return hash.slice(0, 43);
   }
 
   private generateBase64Url(length: number): string {
-    // Generate random base64url string
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
     let result = '';
     for (let i = 0; i < length; i++) {
