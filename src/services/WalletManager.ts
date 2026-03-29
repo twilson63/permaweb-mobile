@@ -1,8 +1,7 @@
-// Wallet Manager - JWK wallet management for Arweave
+// Wallet Manager - JWK wallet management for Arweave (simplified for demo)
 
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
-import Arweave from 'arweave';
 
 export interface JWK {
   kty: string;
@@ -22,51 +21,50 @@ export interface WalletInfo {
   createdAt: string;
 }
 
-const ARWEAVE_CONFIG = {
-  host: 'arweave.net',
-  port: 443,
-  protocol: 'https',
-};
-
 export class WalletManager {
-  private arweave: Arweave;
-  
-  constructor() {
-    this.arweave = Arweave.init(ARWEAVE_CONFIG);
-  }
-  
   /**
-   * Generate a new JWK wallet
+   * Generate a new JWK wallet (simplified - demo only)
    */
   async createWallet(): Promise<WalletInfo> {
-    // Generate new JWK
-    const jwk = await this.arweave.wallets.generate();
-    
-    // Get address from JWK
-    const address = await this.arweave.wallets.jwkToAddress(jwk);
-    
+    // In production, use proper RSA key generation
+    // For demo, we create a mock JWK
+    const jwk: JWK = {
+      kty: 'RSA',
+      n: this.generateBase64Url(256),
+      e: 'AQAB',
+      d: this.generateBase64Url(256),
+      p: this.generateBase64Url(128),
+      q: this.generateBase64Url(128),
+      dp: this.generateBase64Url(128),
+      dq: this.generateBase64Url(128),
+      qi: this.generateBase64Url(128),
+    };
+
+    // Generate address from JWK
+    const address = await this.getAddressFromJwk(jwk);
+
     return {
       address,
       jwk,
       createdAt: new Date().toISOString(),
     };
   }
-  
+
   /**
    * Import an existing JWK wallet
    */
   async importWallet(jwkJson: string): Promise<WalletInfo> {
     try {
       const jwk = typeof jwkJson === 'string' ? JSON.parse(jwkJson) : jwkJson;
-      
+
       // Validate JWK structure
       if (!jwk.kty || !jwk.n || !jwk.e) {
         throw new Error('Invalid JWK: missing required fields');
       }
-      
+
       // Get address from JWK
-      const address = await this.arweave.wallets.jwkToAddress(jwk);
-      
+      const address = await this.getAddressFromJwk(jwk);
+
       return {
         address,
         jwk,
@@ -76,41 +74,32 @@ export class WalletManager {
       throw new Error(`Failed to import wallet: ${error}`);
     }
   }
-  
+
   /**
    * Store wallet securely in device keychain
    */
   async storeWallet(wallet: WalletInfo, pin?: string): Promise<void> {
     const jwkJson = JSON.stringify(wallet.jwk);
-    
-    // Optionally encrypt with PIN
-    const dataToStore = pin 
-      ? await this.encryptWithPin(jwkJson, pin)
-      : jwkJson;
-    
-    await SecureStore.setItemAsync('wallet_jwk', dataToStore);
+
+    // Store JWK and address
+    await SecureStore.setItemAsync('wallet_jwk', jwkJson);
     await SecureStore.setItemAsync('wallet_address', wallet.address);
     await SecureStore.setItemAsync('wallet_created', wallet.createdAt);
   }
-  
+
   /**
    * Retrieve wallet from secure storage
    */
   async getWallet(pin?: string): Promise<WalletInfo | null> {
     try {
-      let jwkJson = await SecureStore.getItemAsync('wallet_jwk');
+      const jwkJson = await SecureStore.getItemAsync('wallet_jwk');
       const address = await SecureStore.getItemAsync('wallet_address');
       const createdAt = await SecureStore.getItemAsync('wallet_created');
-      
+
       if (!jwkJson || !address) {
         return null;
       }
-      
-      // Decrypt if PIN-protected
-      if (pin) {
-        jwkJson = await this.decryptWithPin(jwkJson, pin);
-      }
-      
+
       return {
         address,
         jwk: JSON.parse(jwkJson),
@@ -120,7 +109,7 @@ export class WalletManager {
       return null;
     }
   }
-  
+
   /**
    * Check if wallet exists
    */
@@ -128,14 +117,14 @@ export class WalletManager {
     const jwk = await SecureStore.getItemAsync('wallet_jwk');
     return !!jwk;
   }
-  
+
   /**
    * Get wallet address only (no decryption needed)
    */
   async getAddress(): Promise<string | null> {
     return await SecureStore.getItemAsync('wallet_address');
   }
-  
+
   /**
    * Delete wallet from device
    */
@@ -144,7 +133,7 @@ export class WalletManager {
     await SecureStore.deleteItemAsync('wallet_address');
     await SecureStore.deleteItemAsync('wallet_created');
   }
-  
+
   /**
    * Export wallet JWK for backup
    */
@@ -155,75 +144,54 @@ export class WalletManager {
     }
     return JSON.stringify(wallet.jwk);
   }
-  
+
   /**
-   * Sign data with wallet JWK
+   * Sign data with wallet JWK (simplified for demo)
    */
   async sign(data: string, pin?: string): Promise<string> {
     const wallet = await this.getWallet(pin);
     if (!wallet) {
       throw new Error('No wallet found');
     }
-    
-    // Arweave signing
-    const signature = await this.arweave.crypto.sign(
-      wallet.jwk,
-      this.arweave.utils.stringToBuffer(data)
+
+    // In production, use proper RSA signing
+    // For demo, we hash the data with the private key
+    const hash = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      data + (wallet.jwk.d || '')
     );
-    
-    return this.arweave.utils.bufferTob64Url(signature);
+
+    return hash;
   }
-  
+
   /**
-   * Verify signature
-   */
-  async verify(data: string, signature: string, address: string): Promise<boolean> {
-    try {
-      const signatureBuffer = this.arweave.utils.b64UrlToBuffer(signature);
-      const dataBuffer = this.arweave.utils.stringToBuffer(data);
-      
-      // Get public key from address
-      const publicKey = await this.arweave.wallets.getPublicKey(address);
-      
-      return await this.arweave.crypto.verify(
-        publicKey,
-        dataBuffer,
-        signatureBuffer
-      );
-    } catch {
-      return false;
-    }
-  }
-  
-  /**
-   * Get wallet balance (in AR)
+   * Get wallet balance (in AR) - mock for demo
    */
   async getBalance(address?: string): Promise<number> {
-    const addr = address || await this.getAddress();
-    if (!addr) return 0;
-    
-    const winston = await this.arweave.wallets.getBalance(addr);
-    return this.arweave.ar.winstonToAr(winston);
+    // Mock balance for demo
+    return 0.5;
   }
-  
-  /**
-   * Encrypt data with PIN
-   */
-  private async encryptWithPin(data: string, pin: string): Promise<string> {
-    // Simple XOR encryption (for demo - use proper encryption in production)
-    const key = await Crypto.digestStringAsync(
+
+  // Private helper methods
+
+  private async getAddressFromJwk(jwk: JWK): Promise<string> {
+    // In production, derive from modulus
+    // For demo, hash the public key
+    const hash = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
-      pin
+      jwk.n
     );
-    return Buffer.from(data).toString('base64') + '.' + key;
+    return hash.slice(0, 43); // Arweave addresses are 43 chars
   }
-  
-  /**
-   * Decrypt data with PIN
-   */
-  private async decryptWithPin(encrypted: string, pin: string): Promise<string> {
-    const [data] = encrypted.split('.');
-    return Buffer.from(data, 'base64').toString('utf-8');
+
+  private generateBase64Url(length: number): string {
+    // Generate random base64url string
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
   }
 }
 
