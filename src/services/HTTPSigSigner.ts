@@ -92,18 +92,15 @@ export class HTTPSigSigner {
    * SHA-256 hash to base64
    */
   private async sha256Base64(data: string): Promise<string> {
-    // In React Native, use expo-crypto
     const { digestStringAsync, CryptoDigestAlgorithm, CryptoEncoding } = require('expo-crypto');
     
     const hash = await digestStringAsync(
       CryptoDigestAlgorithm.SHA256,
       data,
-      CryptoEncoding.HEX  // Use HEX and convert to base64
+      CryptoEncoding.BASE64
     );
     
-    // Convert hex to base64
-    const base64 = Buffer.from(hash, 'hex').toString('base64');
-    return `SHA-256=${base64}`;
+    return `SHA-256=${hash}`;
   }
   
   /**

@@ -190,7 +190,7 @@ export class WalletManager {
     const hash = await digestStringAsync(
       CryptoDigestAlgorithm.SHA256,
       data,
-      CryptoEncoding.HEX
+      CryptoEncoding.BASE64
     );
     return hash;
   }
@@ -291,7 +291,7 @@ export class WalletManager {
     const hash = await digestStringAsync(
       CryptoDigestAlgorithm.SHA256,
       jwk.n,
-      CryptoEncoding.HEX
+      CryptoEncoding.BASE64
     );
     
     return hash.slice(0, 43); // Arweave addresses are 43 characters
