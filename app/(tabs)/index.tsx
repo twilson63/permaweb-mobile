@@ -75,13 +75,41 @@ export default function HomeScreen() {
     setCreating(true);
     try {
       console.log('Creating pod:', podName);
+      
+      // Check if we have a real JWK (imported) or demo wallet
+      const wallet = await authService.getWallet();
+      const isRealJWK = wallet?.jwk?.d && wallet?.jwk?.n && wallet?.jwk?.p && wallet?.jwk?.q;
+      
+      if (!isRealJWK) {
+        // Demo mode - create mock pod
+        const mockPod: Pod = {
+          id: `demo-${Date.now()}`,
+          name: podName.trim(),
+          status: 'running',
+          subdomain: `${podName.trim().toLowerCase()}.demo.permaweb.run`,
+          ownerWallet: wallet?.address || 'demo',
+          createdAt: new Date().toISOString(),
+        };
+        
+        setPods([...pods, mockPod]);
+        setShowCreateModal(false);
+        setPodName('');
+        setCreating(false);
+        
+        if (Platform.OS === 'web') {
+          alert(`Demo Pod Created! ✅\n\n${mockPod.name}\n${mockPod.subdomain}\n\nNote: This is a demo pod. Import a real Arweave JWK to create production pods.`);
+        } else {
+          Alert.alert('Demo Pod Created! ✅', `${mockPod.name}\n${mockPod.subdomain}\n\nNote: Import a real Arweave JWK for production.`);
+        }
+        return;
+      }
+      
+      // Real JWK - try to create on production
       const newPod = await podService.createPod(podName.trim(), 'claude-3-opus');
       console.log('Pod created:', newPod);
       
       setShowCreateModal(false);
       setPodName('');
-      
-      // Refresh pod list
       await loadData();
       
       if (Platform.OS === 'web') {
