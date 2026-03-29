@@ -7,6 +7,8 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
+  Alert,
+  Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import { authService } from '../../src/services/AuthService';
@@ -31,8 +33,25 @@ export default function HomeScreen() {
         return;
       }
       setWallet(state.wallet);
-      const podList = await podService.listPods();
-      setPods(podList);
+      
+      // Try to load pods, but use mock data if offline/demo
+      try {
+        const podList = await podService.listPods();
+        setPods(podList);
+      } catch (error) {
+        console.log('Using demo data - pod service not available');
+        // Mock pods for demo
+        setPods([
+          {
+            id: 'demo-pod-1',
+            name: 'my-project',
+            status: 'running',
+            subdomain: 'demo-pod-1.pods.permaweb.run',
+            ownerWallet: state.wallet?.address || '',
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+      }
     } catch (error) {
       console.error('Failed to load pods:', error);
     } finally {
@@ -44,6 +63,14 @@ export default function HomeScreen() {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
+  }
+
+  function handleCreatePod() {
+    if (Platform.OS === 'web') {
+      alert('Coming Soon!\n\nPod creation will be available soon.\n\nFor now, use the demo pod to explore the app.');
+    } else {
+      Alert.alert('Coming Soon', 'Pod creation will be available soon.');
+    }
   }
 
   function getStatusColor(status: string) {
@@ -110,18 +137,13 @@ export default function HomeScreen() {
 
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => {
-          // TODO: Create pod modal
-          Alert.alert('Coming Soon', 'Pod creation coming soon!');
-        }}
+        onPress={handleCreatePod}
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
     </View>
   );
 }
-
-import { Alert } from 'react-native';
 
 const styles = StyleSheet.create({
   container: {
