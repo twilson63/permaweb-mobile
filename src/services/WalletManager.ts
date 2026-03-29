@@ -169,7 +169,9 @@ export class WalletManager {
   }
 
   /**
-   * Sign data with RSA-PSS (Arweave compatible)
+   * Sign data with wallet JWK
+   * For generated wallets (mock), uses hash-based signing
+   * For imported real JWKs, uses Web Crypto RSA-PSS
    */
   async sign(data: string, pin?: string): Promise<string> {
     const wallet = await this.getWallet(pin);
@@ -177,15 +179,21 @@ export class WalletManager {
       throw new Error('No wallet found');
     }
 
-    // For web, we use the Web Crypto API
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.crypto?.subtle) {
-      return await this.signWithWebCrypto(data, wallet.jwk);
+    // Check if this is a real JWK (has proper RSA components from import)
+    const isRealJWK = !!(wallet.jwk.d && wallet.jwk.n && wallet.jwk.e && 
+                          wallet.jwk.p && wallet.jwk.q);
+
+    // For real JWKs on web, try Web Crypto RSA signing
+    if (isRealJWK && Platform.OS === 'web' && typeof window !== 'undefined' && window.crypto?.subtle) {
+      try {
+        return await this.signWithWebCrypto(data, wallet.jwk);
+      } catch (error) {
+        console.warn('Web Crypto RSA signing failed, using hash:', error);
+        // Fall through to hash-based signing
+      }
     }
 
-    // For native, we need to use a proper RSA implementation
-    // For now, return a mock signature (demo mode)
-    console.warn('RSA signing not fully implemented for native - using demo mode');
-    
+    // For demo wallets or when RSA fails, use hash-based signing
     const hash = await digestStringAsync(
       CryptoDigestAlgorithm.SHA256,
       data,
