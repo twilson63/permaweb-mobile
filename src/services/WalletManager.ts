@@ -185,9 +185,12 @@ export class WalletManager {
     // For native, we need to use a proper RSA implementation
     // For now, return a mock signature (demo mode)
     console.warn('RSA signing not fully implemented for native - using demo mode');
-    const hash = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      data
+    
+    const { digestStringAsync, CryptoDigestAlgorithm, CryptoEncoding } = require('expo-crypto');
+    const hash = await digestStringAsync(
+      CryptoDigestAlgorithm.SHA256,
+      data,
+      CryptoEncoding.HEX
     );
     return hash;
   }
