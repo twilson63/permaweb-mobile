@@ -93,13 +93,34 @@ export class HTTPSigSigner {
    * SHA-256 hash to base64
    */
   private async sha256Base64(data: string): Promise<string> {
+    // Use HEX encoding (always supported) and convert to base64
     const hash = await digestStringAsync(
       CryptoDigestAlgorithm.SHA256,
       data,
-      CryptoEncoding.BASE64
+      CryptoEncoding.HEX
     );
     
-    return `SHA-256=${hash}`;
+    // Convert hex to base64 without Buffer (works in browser)
+    const base64 = this.hexToBase64(hash);
+    return `SHA-256=${base64}`;
+  }
+  
+  /**
+   * Convert hex string to base64 without Buffer
+   */
+  private hexToBase64(hex: string): string {
+    // Group hex into pairs and convert to base64
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < hex.length; i += 2) {
+      bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+    }
+    
+    // Convert to base64
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
   }
   
   /**
