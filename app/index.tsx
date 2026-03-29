@@ -1,21 +1,35 @@
 import { Redirect } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { walletManager } from '../src/services/WalletManager';
+import { authService } from '../src/services/AuthService';
 
 export default function Index() {
-  const [hasWallet, setHasWallet] = useState<boolean | null>(null);
+  const [isReady, setIsReady] = useState(false);
+  const [hasWallet, setHasWallet] = useState(false);
 
   useEffect(() => {
     checkWallet();
   }, []);
 
   async function checkWallet() {
-    const exists = await walletManager.hasWallet();
-    setHasWallet(exists);
+    try {
+      const exists = await authService.hasWallet();
+      
+      if (exists) {
+        // Auto-login with existing wallet
+        const wallet = await authService.getWallet();
+        if (wallet) {
+          setHasWallet(true);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check wallet:', error);
+    } finally {
+      setIsReady(true);
+    }
   }
 
-  if (hasWallet === null) {
+  if (!isReady) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F172A' }}>
         <ActivityIndicator size="large" color="#6366F1" />
@@ -23,5 +37,6 @@ export default function Index() {
     );
   }
 
+  // If wallet exists, go to home. Otherwise, go to auth.
   return <Redirect href={hasWallet ? '/(tabs)' : '/auth'} />;
 }

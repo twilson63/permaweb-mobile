@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,13 +11,29 @@ import {
   Platform,
   Alert,
 } from 'react-native';
-import { walletManager } from '../src/services/WalletManager';
 import { authService } from '../src/services/AuthService';
 
 export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importKey, setImportKey] = useState('');
+  const [checkingWallet, setCheckingWallet] = useState(true);
+  const [hasExistingWallet, setHasExistingWallet] = useState(false);
+
+  useEffect(() => {
+    checkExistingWallet();
+  }, []);
+
+  async function checkExistingWallet() {
+    try {
+      const exists = await authService.hasWallet();
+      setHasExistingWallet(exists);
+    } catch (error) {
+      console.error('Failed to check wallet:', error);
+    } finally {
+      setCheckingWallet(false);
+    }
+  }
 
   async function handleCreateWallet() {
     setLoading(true);
@@ -46,6 +62,40 @@ export default function AuthScreen() {
         alert('Error: ' + (error.message || 'Failed to create wallet'));
       } else {
         Alert.alert('Error', error.message || 'Failed to create wallet');
+      }
+    }
+  }
+
+  async function handleUnlockWallet() {
+    // For demo, auto-unlock without PIN
+    // In production, would prompt for PIN
+    setLoading(true);
+    try {
+      const wallet = await authService.getWallet();
+      if (wallet) {
+        if (Platform.OS === 'web') {
+          alert(`Wallet Unlocked! ✅\n\nAddress: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-8)}`);
+          setLoading(false);
+          router.replace('/(tabs)');
+        } else {
+          Alert.alert(
+            'Wallet Unlocked! ✅',
+            `Address: ${wallet.address.slice(0, 8)}...${wallet.address.slice(-8)}`,
+            [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
+          );
+          setLoading(false);
+        }
+      } else {
+        // No wallet found, show create
+        setHasExistingWallet(false);
+      }
+    } catch (error: any) {
+      console.error('Error unlocking wallet:', error);
+      setLoading(false);
+      if (Platform.OS === 'web') {
+        alert('Error: ' + (error.message || 'Failed to unlock wallet'));
+      } else {
+        Alert.alert('Error', error.message || 'Failed to unlock wallet');
       }
     }
   }
@@ -88,6 +138,14 @@ export default function AuthScreen() {
     }
   }
 
+  if (checkingWallet) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#6366F1" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.logo}>
@@ -96,31 +154,60 @@ export default function AuthScreen() {
         <Text style={styles.subtitle}>Your AI Coding Wallet</Text>
       </View>
 
-      <View style={styles.buttons}>
-        <TouchableOpacity
-          style={[styles.button, styles.createButton]}
-          onPress={handleCreateWallet}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#F8FAFC" />
-          ) : (
-            <>
-              <Text style={styles.buttonText}>Create New Wallet</Text>
-              <Text style={styles.buttonHint}>✨ Generate JWK</Text>
-            </>
-          )}
-        </TouchableOpacity>
+      {hasExistingWallet ? (
+        // Existing wallet - show unlock
+        <View style={styles.buttons}>
+          <TouchableOpacity
+            style={[styles.button, styles.createButton]}
+            onPress={handleUnlockWallet}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#F8FAFC" />
+            ) : (
+              <>
+                <Text style={styles.buttonText}>Unlock Wallet</Text>
+                <Text style={styles.buttonHint}>🔓 Continue to your pods</Text>
+              </>
+            )}
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.button, styles.importButton]}
-          onPress={() => setShowImport(true)}
-          disabled={loading}
-        >
-          <Text style={styles.buttonText}>Import Wallet</Text>
-          <Text style={styles.buttonHint}>📥 Paste or scan JWK</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={[styles.button, styles.importButton]}
+            onPress={() => setShowImport(true)}
+          >
+            <Text style={styles.buttonText}>Import Different Wallet</Text>
+            <Text style={styles.buttonHint}>📥 Use a different JWK</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        // No wallet - show create/import
+        <View style={styles.buttons}>
+          <TouchableOpacity
+            style={[styles.button, styles.createButton]}
+            onPress={handleCreateWallet}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#F8FAFC" />
+            ) : (
+              <>
+                <Text style={styles.buttonText}>Create New Wallet</Text>
+                <Text style={styles.buttonHint}>✨ Generate JWK</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.importButton]}
+            onPress={() => setShowImport(true)}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>Import Wallet</Text>
+            <Text style={styles.buttonHint}>📥 Paste or scan JWK</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <Text style={styles.disclaimer}>
         Your wallet keys are stored securely on this device.
@@ -153,8 +240,13 @@ export default function AuthScreen() {
               <TouchableOpacity
                 style={[styles.modalButton, styles.importConfirmButton]}
                 onPress={handleImportWallet}
+                disabled={loading}
               >
-                <Text style={styles.buttonText}>Import</Text>
+                {loading ? (
+                  <ActivityIndicator color="#F8FAFC" />
+                ) : (
+                  <Text style={styles.buttonText}>Import</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
